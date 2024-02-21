@@ -8,7 +8,7 @@ from PIL import Image
 import io
 
 # Initialize your OpenAI API key
-openai.api_key = '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'
+openai.api_key = 'sk-...'
 
 pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 
