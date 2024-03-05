@@ -6,11 +6,15 @@ import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
 import io
+import requests
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+import torch
 
 # Initialize your OpenAI API key
 openai.api_key = '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'
 
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-printed")
+model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-printed")
 
 # Streamlit interface setup
 st.title('Document Analyzer')
@@ -19,26 +23,33 @@ st.title('Document Analyzer')
 uploaded_file = st.file_uploader("Choose a file (PDF, text, etc.)")
 extracted_text = ""  # Initialize extracted text variable
 
+def extract_text_with_trocr(image):
+    # Process the image
+    pixel_values = processor(images=image, return_tensors="pt").pixel_values
+    # Generate text with TrOCR
+    generated_ids = model.generate(pixel_values)
+    # Decode the generated text
+    text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    print(text)
+    return text
+
 # Function to extract text from PDF, including OCR fallback
-def extract_text_from_pdf_with_ocr(pdf_file):
+def extract_text_from_pdf_with_trocr(pdf_file):
     doc = fitz.open(stream=pdf_file.read())
     text = ""
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
-        # First, try to extract text using fitz
-        page_text = page.get_text()
-        if page_text.strip():  # If text is found using fitz, use it
-            text += page_text
-        else:  # If no text found, attempt OCR
-            pix = page.get_pixmap()
-            img = Image.open(io.BytesIO(pix.tobytes()))
-            page_text = pytesseract.image_to_string(img)
-            text += page_text
+        pix = page.get_pixmap()
+        img = Image.open(io.BytesIO(pix.tobytes()))
+        # Use TrOCR for OCR
+        page_text = extract_text_with_trocr(img)
+        text += page_text
+        print(text)
     return text
 
 # Process uploaded PDF file
 if uploaded_file is not None and uploaded_file.type == "application/pdf":
-    extracted_text = extract_text_from_pdf_with_ocr(uploaded_file)
+    extracted_text = extract_text_from_pdf_with_trocr(uploaded_file)
 
 # Text input area
 text_input = st.text_area("Or paste your text here:")
